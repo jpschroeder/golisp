@@ -5,51 +5,45 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 type Symbol string
 type Keyword string
+type Vector []interface{}
 
-func ReadPrint(in *bufio.Reader) (string, error) {
+func ReadEvalPrint(in *bufio.Reader, env *Env) (string, error) {
 	val, err := Read(in)
 	if err != nil {
 		return "", err
 	}
 
+	val, err = Eval(val, env)
+	if err != nil {
+		return "", err
+	}
+
 	out := Print(val)
-	return out, err
-}
-
-func ReadEvalPrint(in *bufio.Reader) (val interface{}, out string, err error) {
-	val, err = Read(in)
-	if err != nil {
-		return
-	}
-
-	val, err = Eval(val)
-	if err != nil {
-		return
-	}
-
-	out = Print(val)
-	return
+	return out, nil
 }
 
 func ReadEvalPrintLoop() {
 	r := bufio.NewReader(os.Stdin)
 	prompt()
+	env := NewEnv()
 	for {
-		val, output, err := ReadEvalPrint(r)
+		output, err := ReadEvalPrint(r, env)
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			fmt.Printf("Error: %v\n", err)
+			fmt.Println(err)
 			prompt()
 			continue
 		}
 
 		fmt.Println(output)
-		if val == io.EOF {
-			break
-		}
 
 		peeked, err := r.Peek(1)
 		if err == nil && (peeked[0] == '\r' || peeked[0] == '\n') {
@@ -69,6 +63,16 @@ func isInputRedirected() bool {
 	return (fi.Mode() & os.ModeCharDevice) == 0
 }
 
+func setupCloseHandler() {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		os.Exit(0)
+	}()
+}
+
 func main() {
+	setupCloseHandler()
 	ReadEvalPrintLoop()
 }

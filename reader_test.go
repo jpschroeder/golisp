@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"container/list"
 	"reflect"
 	"strings"
 	"testing"
@@ -31,8 +30,8 @@ func TestDashes(t *testing.T) {
 
 func TestLists(t *testing.T) {
 	testRead(t, "(+ 1 2)", newList(Symbol("+"), 1, 2))
-	testRead(t, "()", list.New())
-	testRead(t, "( )", list.New())
+	testRead(t, "()", newList())
+	testRead(t, "( )", newList())
 	testRead(t, "(nil)", newList(nil))
 	testRead(t, "((3 4))", newList(newList(3, 4)))
 	testRead(t, "(+ 1 (+ 2 3))", newList(Symbol("+"), 1, newList(Symbol("+"), 2, 3)))
@@ -155,7 +154,7 @@ func TestComments(t *testing.T) {
 }
 
 func testRead(t *testing.T, input string, output interface{}) {
-	actual, err := Read(bufio.NewReader(strings.NewReader(input)))
+	actual, err := read(input)
 	if err != nil {
 		t.Errorf("\nExpected: %v - %v\nActual: Error - %s\n",
 			reflect.TypeOf(output), Print(output),
@@ -170,21 +169,21 @@ func testRead(t *testing.T, input string, output interface{}) {
 }
 
 func testReadError(t *testing.T, input string) {
-	actual, err := Read(bufio.NewReader(strings.NewReader(input)))
+	actual, err := read(input)
 	if err == nil {
 		t.Errorf("Expected: Error\nActual: %v %v\n", reflect.TypeOf(actual), actual)
 	}
 }
 
-func newList(vals ...interface{}) *list.List {
-	l := list.New()
-	for _, val := range vals {
-		l.PushBack(val)
-	}
-	return l
+func read(input string) (interface{}, error) {
+	return Read(bufio.NewReader(strings.NewReader(input)))
 }
 
-func newVect(vals ...interface{}) []interface{} {
+func newList(vals ...interface{}) []interface{} {
+	return vals
+}
+
+func newVect(vals ...interface{}) Vector {
 	return vals
 }
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"container/list"
 	"errors"
 	"fmt"
 	"strconv"
@@ -24,10 +23,6 @@ func init() {
 		'}':  unmatchedDelimiterReader,
 		'\\': characterReader,
 	}
-}
-
-func nonConstituent(ch rune) bool {
-	return ch == '@' || ch == '`' || ch == '~'
 }
 
 func isWhitespace(ch rune) bool {
@@ -53,8 +48,7 @@ func Read(r *bufio.Reader) (interface{}, error) {
 		macroFn, isMacro := macros[ch]
 		if isMacro {
 			ret, err := macroFn(r)
-			//no op macros return the reader
-			if ret == r {
+			if ret == r { //no op macros return the reader
 				continue
 			}
 			return ret, err
@@ -66,10 +60,6 @@ func Read(r *bufio.Reader) (interface{}, error) {
 			if unicode.IsDigit(ch2) {
 				return readNumber(r, ch)
 			}
-		}
-
-		if nonConstituent(ch) {
-			return ch, fmt.Errorf("Invalid leading character: %q", ch)
 		}
 
 		token, err := readToken(r, ch)
@@ -88,13 +78,9 @@ func readToken(r *bufio.Reader, initch rune) (string, error) {
 	for {
 		ch, _, err := r.ReadRune()
 
-		if err != nil || isWhitespace(ch) || isTerminatingMacro(ch) {
+		if err != nil || isWhitespace(ch) || isMacro(ch) {
 			r.UnreadRune()
 			return sb.String(), nil
-		}
-
-		if nonConstituent(ch) {
-			return "", fmt.Errorf("Invalid constituent character: %q", ch)
 		}
 
 		sb.WriteRune(ch)
@@ -151,10 +137,6 @@ func isMacro(ch rune) bool {
 	return ismacro
 }
 
-func isTerminatingMacro(ch rune) bool {
-	return ch != '#' && ch != '\'' && isMacro(ch)
-}
-
 func stringReader(r *bufio.Reader) (interface{}, error) {
 	var sb strings.Builder
 
@@ -181,7 +163,7 @@ func stringReader(r *bufio.Reader) (interface{}, error) {
 			case '\\':
 			case '"':
 			default:
-				return nil, fmt.Errorf("Unsupported escape character: %q", ch)
+				return nil, fmt.Errorf("Unsupported escape character: \\%s", string(ch))
 			}
 		}
 		sb.WriteRune(ch)
@@ -232,9 +214,9 @@ func characterReader(r *bufio.Reader) (interface{}, error) {
 }
 
 func listReader(r *bufio.Reader) (interface{}, error) {
-	l := list.New()
+	var l []interface{}
 	err := readDelimitedList(r, ')', func(item interface{}) {
-		l.PushBack(item)
+		l = append(l, item)
 	})
 	return l, err
 }
@@ -244,7 +226,7 @@ func vectorReader(r *bufio.Reader) (interface{}, error) {
 	err := readDelimitedList(r, ']', func(item interface{}) {
 		l = append(l, item)
 	})
-	return l, err
+	return Vector(l), err
 }
 
 func mapReader(r *bufio.Reader) (interface{}, error) {
