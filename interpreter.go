@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 )
@@ -9,23 +10,59 @@ var defaultEnv map[Symbol]interface{}
 
 func init() {
 	defaultEnv = map[Symbol]interface{}{
-		Symbol("+"):     primitive(add),
-		Symbol("-"):     primitive(sub),
-		Symbol("*"):     primitive(mul),
-		Symbol("/"):     primitive(div),
-		Symbol("="):     primitive(eq),
-		Symbol("<"):     primitive(lt),
-		Symbol("<="):    primitive(lte),
-		Symbol(">"):     primitive(gt),
-		Symbol(">="):    primitive(gte),
-		Symbol("list"):  primitive(list),
-		Symbol("quote"): specialform(quote),
-		Symbol("do"):    specialform(do),
-		Symbol("def"):   specialform(def),
-		Symbol("fn"):    specialform(fn),
-		Symbol("defn"):  specialform(defn),
-		Symbol("if"):    specialform(ifprim),
+		Symbol("+"):           primitive(add),
+		Symbol("-"):           primitive(sub),
+		Symbol("*"):           primitive(mul),
+		Symbol("/"):           primitive(div),
+		Symbol("="):           primitive(eq),
+		Symbol("<"):           primitive(lt),
+		Symbol("<="):          primitive(lte),
+		Symbol(">"):           primitive(gt),
+		Symbol(">="):          primitive(gte),
+		Symbol("list"):        primitive(list),
+		Symbol("quote"):       specialform(quote),
+		Symbol("do"):          specialform(do),
+		Symbol("def"):         specialform(def),
+		Symbol("fn"):          specialform(fn),
+		Symbol("defn"):        specialform(defn),
+		Symbol("if"):          specialform(ifprim),
+		Symbol("fmt.Println"): gofunc(fmt.Println),
+		Symbol("fmt.Printf"):  gofunc(fmt.Printf),
+		Symbol("testfunc"):    gofunc(testfunc),
+		Symbol("testvar"):     gofunc(testvar),
+		Symbol("testerr1"):    gofunc(testerr1),
+		Symbol("testerr2"):    gofunc(testerr2),
+		Symbol("testerr3"):    gofunc(testerr3),
 	}
+}
+
+func testvar(i int, s ...string) (int, []string) {
+	return i, s
+}
+
+func testfunc(i int, s string) (int, string) {
+	return i, s
+}
+
+func testerr1(s string) error {
+	if len(s) > 0 {
+		return errors.New(s)
+	}
+	return nil
+}
+
+func testerr2(i int, s string) (int, error) {
+	if len(s) > 0 {
+		return i, errors.New(s)
+	}
+	return i, nil
+}
+
+func testerr3(i, j int, s string) (int, int, error) {
+	if len(s) > 0 {
+		return i, j, errors.New(s)
+	}
+	return i, j, nil
 }
 
 // primitives take pre-evaluated arguments
@@ -33,6 +70,9 @@ type primitive func(args []interface{}) (interface{}, error)
 
 // special forms take unevaluated arguments and the env
 type specialform func(args []interface{}, env *Env) (interface{}, error)
+
+// a wrapper around a go function
+type gofunc interface{}
 
 type procedure struct {
 	params []Symbol
@@ -76,6 +116,11 @@ func Eval(val interface{}, env *Env) (interface{}, error) {
 		proc, isProc := front.(procedure)
 		if isProc {
 			return apply(proc, args)
+		}
+
+		fun, isFun := front.(gofunc)
+		if isFun {
+			return call(fun, args)
 		}
 
 		return nil, fmt.Errorf("Invalid proc: %v", front)
@@ -127,6 +172,84 @@ func apply(proc procedure, args []interface{}) (interface{}, error) {
 	}
 
 	return do(proc.body, child)
+}
+
+var errorType = reflect.TypeOf((*error)(nil)).Elem()
+
+func call(fun gofunc, args []interface{}) (interface{}, error) {
+	f := reflect.ValueOf(interface{}(fun))
+
+	if !isArgLenValid(f.Type(), len(args)) {
+		return nil, fmt.Errorf("Wrong number of args (%d) passed to procedure", len(args))
+	}
+
+	in := make([]reflect.Value, len(args))
+	for i, arg := range args {
+		if !isArgTypeValid(f.Type(), reflect.TypeOf(arg), i) {
+			return nil, fmt.Errorf("Wrong arg type (%v) passed to procedure", reflect.TypeOf(arg))
+		}
+
+		in[i] = reflect.ValueOf(arg)
+	}
+
+	result := f.Call(in)
+
+	if len(result) < 1 {
+		return nil, nil
+	}
+
+	out := make([]interface{}, 0)
+	var err error
+	for _, res := range result {
+		if res.Type() == errorType {
+			if !res.IsNil() {
+				err = res.Interface().(error)
+			}
+		} else if res.Kind() == reflect.Slice {
+			// If the procedure returns a slice, convert it to a []interface{}
+			arr := make([]interface{}, res.Len())
+			for i := 0; i < res.Len(); i++ {
+				arr[i] = res.Index(i).Interface()
+			}
+			out = append(out, arr)
+		} else {
+			out = append(out, res.Interface())
+		}
+	}
+
+	if len(out) == 0 {
+		return nil, err
+	}
+	if len(out) == 1 {
+		return out[0], err
+	}
+	return out, err
+}
+
+func isArgLenValid(funcT reflect.Type, length int) bool {
+	if !funcT.IsVariadic() {
+		// Non variadic functions need matching argument lengths
+		return length == funcT.NumIn()
+	} else {
+		// Variadic functions need to have at least the non-variadic parts
+		// func(x, y int, s ...string) -> NumIn == 3
+		return length >= funcT.NumIn()-1
+	}
+}
+
+func isArgTypeValid(funcT, argT reflect.Type, argIdx int) bool {
+	if !funcT.IsVariadic() {
+		// Non variadic, check that arg is assignable to param at idx
+		return argT.AssignableTo(funcT.In(argIdx))
+	} else {
+		if argIdx < funcT.NumIn()-1 {
+			// Variadic, but before the last param
+			return argT.AssignableTo(funcT.In(argIdx))
+		} else {
+			// Variadic, a parameter in the last array
+			return argT.AssignableTo(funcT.In(funcT.NumIn() - 1).Elem())
+		}
+	}
 }
 
 // Primitives

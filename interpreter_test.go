@@ -71,6 +71,9 @@ func TestDef(t *testing.T) {
 func TestFn(t *testing.T) {
 	testEval(t, "((fn [x] (+ 1 x)) 10)", 11)
 	testEval(t, "((fn [x y] (+ y x)) 10 7)", 17)
+	testEval(t, `(( 
+		(fn [x] (fn [y] (+ x y))) 
+		10) 7)`, 17)
 }
 
 func TestDefn(t *testing.T) {
@@ -108,6 +111,34 @@ func TestFib(t *testing.T) {
 					(fib-iter next (+ curr next) (- n 1))))
 			(fib-iter 0 1 n))
 		(fib 10)`, 55)
+}
+
+func TestReflection(t *testing.T) {
+	testEvalError(t, "(testfunc)")
+	testEvalError(t, "(testfunc 1)")
+	testEvalError(t, "(testfunc \"blah\" \"bloo\")")
+	testEvalError(t, "(testfunc 1 2)")
+	testEvalError(t, "(testfunc 1 \"blah\" 2)")
+	testEval(t, "(testfunc 1 \"blah\")", newList(1, "blah"))
+}
+
+func TestReflectionVariadic(t *testing.T) {
+	testEvalError(t, "(testvar)")
+	testEvalError(t, "(testvar \"blah\" \"bloo\")")
+	testEvalError(t, "(testvar 1 2)")
+	testEvalError(t, "(testvar 1 \"blah\" 2)")
+	testEval(t, "(testvar 1)", newList(1, newList()))
+	testEval(t, "(testvar 1 \"blah\")", newList(1, newList("blah")))
+	testEval(t, "(testvar 1 \"blah\" \"bloo\")", newList(1, newList("blah", "bloo")))
+}
+
+func TestReflectionError(t *testing.T) {
+	testEvalError(t, "(testerr1 \"err\")")
+	testEval(t, "(testerr1 \"\")", nil)
+	testEvalError(t, "(testerr2 1 \"err\")")
+	testEval(t, "(testerr2 1 \"\")", 1)
+	testEvalError(t, "(testerr3 1 2 \"err\")")
+	testEval(t, "(testerr3 1 2 \"\")", newList(1, 2))
 }
 
 func TestError(t *testing.T) {
