@@ -9,10 +9,10 @@ import (
 	"unicode"
 )
 
-var macros map[rune]func(r *bufio.Reader) (interface{}, error)
+var macros map[rune]func(r *bufio.Reader) (Expr, error)
 
 func init() {
-	macros = map[rune]func(r *bufio.Reader) (interface{}, error){
+	macros = map[rune]func(r *bufio.Reader) (Expr, error){
 		'"':  stringReader,
 		';':  commentReader,
 		'(':  listReader,
@@ -29,7 +29,7 @@ func isWhitespace(ch rune) bool {
 	return unicode.IsSpace(ch) || ch == ','
 }
 
-func Read(r *bufio.Reader) (interface{}, error) {
+func Read(r *bufio.Reader) (Expr, error) {
 	for {
 		ch, _, err := r.ReadRune()
 
@@ -87,7 +87,7 @@ func readToken(r *bufio.Reader, initch rune) (string, error) {
 	}
 }
 
-func readNumber(r *bufio.Reader, initch rune) (interface{}, error) {
+func readNumber(r *bufio.Reader, initch rune) (Expr, error) {
 	var sb strings.Builder
 	sb.WriteRune(initch)
 
@@ -103,7 +103,7 @@ func readNumber(r *bufio.Reader, initch rune) (interface{}, error) {
 	return matchNumber(sb.String())
 }
 
-func interpretToken(s string) (interface{}, error) {
+func interpretToken(s string) (Expr, error) {
 	if s == "nil" {
 		return nil, nil
 	}
@@ -120,7 +120,7 @@ func interpretToken(s string) (interface{}, error) {
 	}
 }
 
-func matchNumber(s string) (interface{}, error) {
+func matchNumber(s string) (Expr, error) {
 	i, erri := strconv.Atoi(s)
 	if erri == nil {
 		return i, nil
@@ -137,7 +137,7 @@ func isMacro(ch rune) bool {
 	return ismacro
 }
 
-func stringReader(r *bufio.Reader) (interface{}, error) {
+func stringReader(r *bufio.Reader) (Expr, error) {
 	var sb strings.Builder
 
 	for ch, _, err := r.ReadRune(); ch != '"'; ch, _, err = r.ReadRune() {
@@ -172,7 +172,7 @@ func stringReader(r *bufio.Reader) (interface{}, error) {
 	return sb.String(), nil
 }
 
-func commentReader(r *bufio.Reader) (interface{}, error) {
+func commentReader(r *bufio.Reader) (Expr, error) {
 	ch, _, err := r.ReadRune()
 	for err != nil && ch != '\n' && ch != '\r' {
 		ch, _, err = r.ReadRune()
@@ -180,7 +180,7 @@ func commentReader(r *bufio.Reader) (interface{}, error) {
 	return r, nil
 }
 
-func characterReader(r *bufio.Reader) (interface{}, error) {
+func characterReader(r *bufio.Reader) (Expr, error) {
 	ch, _, err := r.ReadRune()
 	if err != nil {
 		return nil, err
@@ -213,26 +213,26 @@ func characterReader(r *bufio.Reader) (interface{}, error) {
 	}
 }
 
-func listReader(r *bufio.Reader) (interface{}, error) {
-	var l []interface{}
-	err := readDelimitedList(r, ')', func(item interface{}) {
+func listReader(r *bufio.Reader) (Expr, error) {
+	var l []Expr
+	err := readDelimitedList(r, ')', func(item Expr) {
 		l = append(l, item)
 	})
-	return l, err
+	return List(l), err
 }
 
-func vectorReader(r *bufio.Reader) (interface{}, error) {
-	var l []interface{}
-	err := readDelimitedList(r, ']', func(item interface{}) {
+func vectorReader(r *bufio.Reader) (Expr, error) {
+	var l []Expr
+	err := readDelimitedList(r, ']', func(item Expr) {
 		l = append(l, item)
 	})
 	return Vector(l), err
 }
 
-func mapReader(r *bufio.Reader) (interface{}, error) {
-	m := make(map[interface{}]interface{})
-	var key interface{}
-	err := readDelimitedList(r, '}', func(item interface{}) {
+func mapReader(r *bufio.Reader) (Expr, error) {
+	m := make(Map)
+	var key Expr
+	err := readDelimitedList(r, '}', func(item Expr) {
 		if key == nil {
 			key = item
 		} else {
@@ -246,11 +246,11 @@ func mapReader(r *bufio.Reader) (interface{}, error) {
 	return m, err
 }
 
-func unmatchedDelimiterReader(r *bufio.Reader) (interface{}, error) {
+func unmatchedDelimiterReader(r *bufio.Reader) (Expr, error) {
 	return nil, errors.New("Unmatched delimter")
 }
 
-func readDelimitedList(r *bufio.Reader, delim rune, add func(interface{})) error {
+func readDelimitedList(r *bufio.Reader, delim rune, add func(Expr)) error {
 	for {
 		ch, _, err := r.ReadRune()
 

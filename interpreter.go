@@ -1,15 +1,15 @@
 package main
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
 	"reflect"
 )
 
-var defaultEnv map[Symbol]interface{}
+var defaultEnv map[Symbol]Expr
 
 func init() {
-	defaultEnv = map[Symbol]interface{}{
+	defaultEnv = map[Symbol]Expr{
 		Symbol("+"):           primitive(add),
 		Symbol("-"):           primitive(sub),
 		Symbol("*"):           primitive(mul),
@@ -28,67 +28,34 @@ func init() {
 		Symbol("if"):          specialform(ifprim),
 		Symbol("fmt.Println"): gofunc(fmt.Println),
 		Symbol("fmt.Printf"):  gofunc(fmt.Printf),
-		Symbol("testfunc"):    gofunc(testfunc),
-		Symbol("testvar"):     gofunc(testvar),
-		Symbol("testerr1"):    gofunc(testerr1),
-		Symbol("testerr2"):    gofunc(testerr2),
-		Symbol("testerr3"):    gofunc(testerr3),
+		Symbol("marshal"):     gofunc(marshal),
 	}
-}
-
-func testvar(i int, s ...string) (int, []string) {
-	return i, s
-}
-
-func testfunc(i int, s string) (int, string) {
-	return i, s
-}
-
-func testerr1(s string) error {
-	if len(s) > 0 {
-		return errors.New(s)
-	}
-	return nil
-}
-
-func testerr2(i int, s string) (int, error) {
-	if len(s) > 0 {
-		return i, errors.New(s)
-	}
-	return i, nil
-}
-
-func testerr3(i, j int, s string) (int, int, error) {
-	if len(s) > 0 {
-		return i, j, errors.New(s)
-	}
-	return i, j, nil
 }
 
 // primitives take pre-evaluated arguments
-type primitive func(args []interface{}) (interface{}, error)
+type primitive func(args []Expr) (Expr, error)
 
 // special forms take unevaluated arguments and the env
-type specialform func(args []interface{}, env *Env) (interface{}, error)
+type specialform func(args []Expr, env *Env) (Expr, error)
 
 // a wrapper around a go function
-type gofunc interface{}
+type gofunc Expr
 
 type procedure struct {
 	params []Symbol
-	body   []interface{}
+	body   []Expr
 	env    *Env
 }
 
-func Eval(val interface{}, env *Env) (interface{}, error) {
+func Eval(val Expr, env *Env) (Expr, error) {
 	switch t := val.(type) {
 	case Symbol:
 		return env.Find(t)
 	case Vector:
 		return evalVector(t, env)
-	case map[interface{}]interface{}:
+	case Map:
 		return evalMap(t, env)
-	case []interface{}:
+	case List:
 		if len(t) == 0 {
 			return t, nil
 		}
@@ -129,12 +96,16 @@ func Eval(val interface{}, env *Env) (interface{}, error) {
 	}
 }
 
-func evalVector(val []interface{}, env *Env) (Vector, error) {
-	return evalList(val, env)
+func evalVector(val Vector, env *Env) (Vector, error) {
+	return evalSlice(val, env)
 }
 
-func evalList(val []interface{}, env *Env) ([]interface{}, error) {
-	arr := make([]interface{}, len(val))
+func evalList(val List, env *Env) (List, error) {
+	return evalSlice(val, env)
+}
+
+func evalSlice(val []Expr, env *Env) ([]Expr, error) {
+	arr := make([]Expr, len(val))
 	for i, v := range val {
 		res, err := Eval(v, env)
 		if err != nil {
@@ -145,8 +116,8 @@ func evalList(val []interface{}, env *Env) ([]interface{}, error) {
 	return arr, nil
 }
 
-func evalMap(val map[interface{}]interface{}, env *Env) (map[interface{}]interface{}, error) {
-	ret := make(map[interface{}]interface{}, len(val))
+func evalMap(val Map, env *Env) (Map, error) {
+	ret := make(Map, len(val))
 	for k, v := range val {
 		evalK, err := Eval(k, env)
 		if err != nil {
@@ -161,7 +132,7 @@ func evalMap(val map[interface{}]interface{}, env *Env) (map[interface{}]interfa
 	return ret, nil
 }
 
-func apply(proc procedure, args []interface{}) (interface{}, error) {
+func apply(proc procedure, args []Expr) (Expr, error) {
 	if len(args) != len(proc.params) {
 		return nil, fmt.Errorf("Wrong number of args (%d) passed to procedure", len(args))
 	}
@@ -176,8 +147,8 @@ func apply(proc procedure, args []interface{}) (interface{}, error) {
 
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
-func call(fun gofunc, args []interface{}) (interface{}, error) {
-	f := reflect.ValueOf(interface{}(fun))
+func call(fun gofunc, args []Expr) (Expr, error) {
+	f := reflect.ValueOf(fun)
 
 	if !isArgLenValid(f.Type(), len(args)) {
 		return nil, fmt.Errorf("Wrong number of args (%d) passed to procedure", len(args))
@@ -198,7 +169,7 @@ func call(fun gofunc, args []interface{}) (interface{}, error) {
 		return nil, nil
 	}
 
-	out := make([]interface{}, 0)
+	out := make(List, 0)
 	var err error
 	for _, res := range result {
 		if res.Type() == errorType {
@@ -206,8 +177,8 @@ func call(fun gofunc, args []interface{}) (interface{}, error) {
 				err = res.Interface().(error)
 			}
 		} else if res.Kind() == reflect.Slice {
-			// If the procedure returns a slice, convert it to a []interface{}
-			arr := make([]interface{}, res.Len())
+			// If the procedure returns a slice, convert it to a List
+			arr := make(List, res.Len())
 			for i := 0; i < res.Len(); i++ {
 				arr[i] = res.Index(i).Interface()
 			}
@@ -254,7 +225,7 @@ func isArgTypeValid(funcT, argT reflect.Type, argIdx int) bool {
 
 // Primitives
 
-func add(args []interface{}) (interface{}, error) {
+func add(args []Expr) (Expr, error) {
 	return agg(args,
 		func(r, x int) int {
 			return r + x
@@ -264,7 +235,7 @@ func add(args []interface{}) (interface{}, error) {
 		})
 }
 
-func sub(args []interface{}) (interface{}, error) {
+func sub(args []Expr) (Expr, error) {
 	return agg(args,
 		func(r, x int) int {
 			return r - x
@@ -274,7 +245,7 @@ func sub(args []interface{}) (interface{}, error) {
 		})
 }
 
-func mul(args []interface{}) (interface{}, error) {
+func mul(args []Expr) (Expr, error) {
 	return agg(args,
 		func(r, x int) int {
 			return r * x
@@ -284,7 +255,7 @@ func mul(args []interface{}) (interface{}, error) {
 		})
 }
 
-func div(args []interface{}) (interface{}, error) {
+func div(args []Expr) (Expr, error) {
 	return agg(args,
 		func(r, x int) int {
 			return r / x
@@ -294,7 +265,7 @@ func div(args []interface{}) (interface{}, error) {
 		})
 }
 
-func agg(args []interface{}, accumInt func(int, int) int, accumFloat func(float64, float64) float64) (interface{}, error) {
+func agg(args []Expr, accumInt func(int, int) int, accumFloat func(float64, float64) float64) (Expr, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("Wrong number of args (%d) passed to procedure", len(args))
 	}
@@ -322,7 +293,7 @@ func agg(args []interface{}, accumInt func(int, int) int, accumFloat func(float6
 	return ret, nil
 }
 
-func lt(args []interface{}) (interface{}, error) {
+func lt(args []Expr) (Expr, error) {
 	return order(args,
 		func(r, x int) bool {
 			return r < x
@@ -332,7 +303,7 @@ func lt(args []interface{}) (interface{}, error) {
 		})
 }
 
-func lte(args []interface{}) (interface{}, error) {
+func lte(args []Expr) (Expr, error) {
 	return order(args,
 		func(r, x int) bool {
 			return r <= x
@@ -342,7 +313,7 @@ func lte(args []interface{}) (interface{}, error) {
 		})
 }
 
-func gt(args []interface{}) (interface{}, error) {
+func gt(args []Expr) (Expr, error) {
 	return order(args,
 		func(r, x int) bool {
 			return r > x
@@ -352,7 +323,7 @@ func gt(args []interface{}) (interface{}, error) {
 		})
 }
 
-func gte(args []interface{}) (interface{}, error) {
+func gte(args []Expr) (Expr, error) {
 	return order(args,
 		func(r, x int) bool {
 			return r >= x
@@ -362,7 +333,7 @@ func gte(args []interface{}) (interface{}, error) {
 		})
 }
 
-func order(args []interface{}, orderInt func(int, int) bool, orderFloat func(float64, float64) bool) (interface{}, error) {
+func order(args []Expr, orderInt func(int, int) bool, orderFloat func(float64, float64) bool) (Expr, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("Wrong number of args (%d) passed to procedure", len(args))
 	}
@@ -394,7 +365,7 @@ func order(args []interface{}, orderInt func(int, int) bool, orderFloat func(flo
 	return true, nil
 }
 
-func eq(args []interface{}) (interface{}, error) {
+func eq(args []Expr) (Expr, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("Wrong number of args (%d) passed to: =", len(args))
 	}
@@ -411,20 +382,20 @@ func eq(args []interface{}) (interface{}, error) {
 	return true, nil
 }
 
-func list(args []interface{}) (interface{}, error) {
-	return args, nil
+func list(args []Expr) (Expr, error) {
+	return List(args), nil
 }
 
 // Special Forms
 
-func quote(args []interface{}, env *Env) (interface{}, error) {
+func quote(args []Expr, env *Env) (Expr, error) {
 	if len(args) != 1 {
 		return nil, fmt.Errorf("Wrong number of args (%d) passed to quote", len(args))
 	}
 	return args[0], nil
 }
 
-func do(args []interface{}, env *Env) (interface{}, error) {
+func do(args []Expr, env *Env) (Expr, error) {
 	if len(args) == 0 {
 		return nil, nil
 	}
@@ -436,7 +407,7 @@ func do(args []interface{}, env *Env) (interface{}, error) {
 	return ret[len(ret)-1], nil
 }
 
-func def(args []interface{}, env *Env) (interface{}, error) {
+func def(args []Expr, env *Env) (Expr, error) {
 	if len(args) > 2 {
 		return nil, fmt.Errorf("Too many arguments to def")
 	}
@@ -459,7 +430,7 @@ func def(args []interface{}, env *Env) (interface{}, error) {
 	return sym, nil
 }
 
-func fn(args []interface{}, env *Env) (interface{}, error) {
+func fn(args []Expr, env *Env) (Expr, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("Too few arguments to fn")
 	}
@@ -485,7 +456,7 @@ func fn(args []interface{}, env *Env) (interface{}, error) {
 	}, nil
 }
 
-func defn(args []interface{}, env *Env) (interface{}, error) {
+func defn(args []Expr, env *Env) (Expr, error) {
 	if len(args) < 2 {
 		return nil, fmt.Errorf("Too few arguments to defn")
 	}
@@ -494,10 +465,10 @@ func defn(args []interface{}, env *Env) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	return def([]interface{}{args[0], proc}, env)
+	return def([]Expr{args[0], proc}, env)
 }
 
-func ifprim(args []interface{}, env *Env) (interface{}, error) {
+func ifprim(args []Expr, env *Env) (Expr, error) {
 	if len(args) < 2 {
 		return nil, fmt.Errorf("Too few arguments to if")
 	}
@@ -521,10 +492,18 @@ func ifprim(args []interface{}, env *Env) (interface{}, error) {
 	return nil, nil
 }
 
-func isTruthy(val interface{}) bool {
+func isTruthy(val Expr) bool {
 	isTrue, isBoolean := val.(bool)
 	if isBoolean {
 		return isTrue
 	}
 	return val != nil
+}
+
+func marshal(val interface{}) (string, error) {
+	barr, err := json.Marshal(val)
+	if err != nil {
+		return "", err
+	}
+	return string(barr), err
 }

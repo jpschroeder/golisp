@@ -3,7 +3,7 @@ package main
 import "fmt"
 
 type Env struct {
-	symbols map[Symbol]interface{}
+	symbols map[Symbol]Expr
 	parent  *Env
 }
 
@@ -12,14 +12,14 @@ func NewEnv() *Env {
 }
 
 func ChildEnv(parent *Env) *Env {
-	return &Env{make(map[Symbol]interface{}), parent}
+	return &Env{make(map[Symbol]Expr), parent}
 }
 
-func (e *Env) Define(s Symbol, val interface{}) {
+func (e *Env) Define(s Symbol, val Expr) {
 	e.symbols[s] = val
 }
 
-func (e *Env) Find(s Symbol) (interface{}, error) {
+func (e *Env) Find(s Symbol) (Expr, error) {
 	f, exists := e.symbols[s]
 	if exists {
 		return f, nil

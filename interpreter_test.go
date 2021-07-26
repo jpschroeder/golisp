@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"reflect"
 	"strings"
@@ -19,18 +20,18 @@ func TestArithmetic(t *testing.T) {
 }
 
 func TestEmpty(t *testing.T) {
-	testEval(t, "()", newList())
-	testEval(t, "[]", newVect())
-	testEval(t, "{}", newMap{})
+	testEval(t, "()", List{})
+	testEval(t, "[]", Vector{})
+	testEval(t, "{}", Map{})
 }
 
 func TestCollections(t *testing.T) {
-	testEval(t, "[1 2 (+ 1 2)]", newVect(1, 2, 3))
-	testEval(t, "{\"a\" (+ 7 8)}", newMap{"a": 15})
-	testEval(t, "{:a (+ 7 8)}", newMap{Keyword("a"): 15})
-	testEval(t, "(list 1)", newList(1))
-	testEval(t, "(list 1 2 (+ 1 2))", newList(1, 2, 3))
-	testEval(t, "(quote (\"a\" (+ 7 8)))", newList("a", newList(Symbol("+"), 7, 8)))
+	testEval(t, "[1 2 (+ 1 2)]", Vector{1, 2, 3})
+	testEval(t, "{\"a\" (+ 7 8)}", Map{"a": 15})
+	testEval(t, "{:a (+ 7 8)}", Map{Keyword("a"): 15})
+	testEval(t, "(list 1)", List{1})
+	testEval(t, "(list 1 2 (+ 1 2))", List{1, 2, 3})
+	testEval(t, "(quote (\"a\" (+ 7 8)))", List{"a", List{Symbol("+"), 7, 8}})
 }
 
 func TestEq(t *testing.T) {
@@ -119,7 +120,7 @@ func TestReflection(t *testing.T) {
 	testEvalError(t, "(testfunc \"blah\" \"bloo\")")
 	testEvalError(t, "(testfunc 1 2)")
 	testEvalError(t, "(testfunc 1 \"blah\" 2)")
-	testEval(t, "(testfunc 1 \"blah\")", newList(1, "blah"))
+	testEval(t, "(testfunc 1 \"blah\")", List{1, "blah"})
 }
 
 func TestReflectionVariadic(t *testing.T) {
@@ -127,9 +128,9 @@ func TestReflectionVariadic(t *testing.T) {
 	testEvalError(t, "(testvar \"blah\" \"bloo\")")
 	testEvalError(t, "(testvar 1 2)")
 	testEvalError(t, "(testvar 1 \"blah\" 2)")
-	testEval(t, "(testvar 1)", newList(1, newList()))
-	testEval(t, "(testvar 1 \"blah\")", newList(1, newList("blah")))
-	testEval(t, "(testvar 1 \"blah\" \"bloo\")", newList(1, newList("blah", "bloo")))
+	testEval(t, "(testvar 1)", List{1, List{}})
+	testEval(t, "(testvar 1 \"blah\")", List{1, List{"blah"}})
+	testEval(t, "(testvar 1 \"blah\" \"bloo\")", List{1, List{"blah", "bloo"}})
 }
 
 func TestReflectionError(t *testing.T) {
@@ -138,7 +139,7 @@ func TestReflectionError(t *testing.T) {
 	testEvalError(t, "(testerr2 1 \"err\")")
 	testEval(t, "(testerr2 1 \"\")", 1)
 	testEvalError(t, "(testerr3 1 2 \"err\")")
-	testEval(t, "(testerr3 1 2 \"\")", newList(1, 2))
+	testEval(t, "(testerr3 1 2 \"\")", List{1, 2})
 }
 
 func TestError(t *testing.T) {
@@ -153,7 +154,7 @@ func TestError(t *testing.T) {
 	testEvalError(t, "(if true 1 2 3)")
 }
 
-func testEval(t *testing.T, input string, output interface{}) {
+func testEval(t *testing.T, input string, output Expr) {
 	actual, err := readEval(input, NewEnv())
 	if err != nil {
 		t.Errorf("\nExpected: %v - %v\nActual: Error - %s\n",
@@ -176,7 +177,7 @@ func testEvalError(t *testing.T, input string) {
 	}
 }
 
-func readEval(input string, env *Env) (val interface{}, err error) {
+func readEval(input string, env *Env) (val Expr, err error) {
 	in := bufio.NewReader(strings.NewReader(input))
 
 	for {
@@ -192,4 +193,48 @@ func readEval(input string, env *Env) (val interface{}, err error) {
 	}
 
 	return
+}
+
+// Test functions to call via reflection
+
+func init() {
+	testfuncs := map[Symbol]Expr{
+		Symbol("testfunc"): gofunc(testfunc),
+		Symbol("testvar"):  gofunc(testvar),
+		Symbol("testerr1"): gofunc(testerr1),
+		Symbol("testerr2"): gofunc(testerr2),
+		Symbol("testerr3"): gofunc(testerr3),
+	}
+	for k, v := range testfuncs {
+		defaultEnv[k] = v
+	}
+}
+
+func testvar(i int, s ...string) (int, []string) {
+	return i, s
+}
+
+func testfunc(i int, s string) (int, string) {
+	return i, s
+}
+
+func testerr1(s string) error {
+	if len(s) > 0 {
+		return errors.New(s)
+	}
+	return nil
+}
+
+func testerr2(i int, s string) (int, error) {
+	if len(s) > 0 {
+		return i, errors.New(s)
+	}
+	return i, nil
+}
+
+func testerr3(i, j int, s string) (int, int, error) {
+	if len(s) > 0 {
+		return i, j, errors.New(s)
+	}
+	return i, j, nil
 }

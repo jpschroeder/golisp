@@ -29,21 +29,21 @@ func TestDashes(t *testing.T) {
 }
 
 func TestLists(t *testing.T) {
-	testRead(t, "(+ 1 2)", newList(Symbol("+"), 1, 2))
-	testRead(t, "()", newList())
-	testRead(t, "( )", newList())
-	testRead(t, "(nil)", newList(nil))
-	testRead(t, "((3 4))", newList(newList(3, 4)))
-	testRead(t, "(+ 1 (+ 2 3))", newList(Symbol("+"), 1, newList(Symbol("+"), 2, 3)))
-	testRead(t, "  ( +   1   (+   2 3   )   )  ", newList(Symbol("+"), 1, newList(Symbol("+"), 2, 3)))
-	testRead(t, "(* 1 2)", newList(Symbol("*"), 1, 2))
-	testRead(t, "(** 1 2)", newList(Symbol("**"), 1, 2))
-	testRead(t, "(* -3 6)", newList(Symbol("*"), -3, 6))
-	testRead(t, "(()())", newList(newList(), newList()))
+	testRead(t, "(+ 1 2)", List{Symbol("+"), 1, 2})
+	testRead(t, "()", List{})
+	testRead(t, "( )", List{})
+	testRead(t, "(nil)", List{nil})
+	testRead(t, "((3 4))", List{List{3, 4}})
+	testRead(t, "(+ 1 (+ 2 3))", List{Symbol("+"), 1, List{Symbol("+"), 2, 3}})
+	testRead(t, "  ( +   1   (+   2 3   )   )  ", List{Symbol("+"), 1, List{Symbol("+"), 2, 3}})
+	testRead(t, "(* 1 2)", List{Symbol("*"), 1, 2})
+	testRead(t, "(** 1 2)", List{Symbol("**"), 1, 2})
+	testRead(t, "(* -3 6)", List{Symbol("*"), -3, 6})
+	testRead(t, "(()())", List{List{}, List{}})
 }
 
 func TestCommas(t *testing.T) {
-	testRead(t, "(1 2, 3,,,,),,", newList(1, 2, 3))
+	testRead(t, "(1 2, 3,,,,),,", List{1, 2, 3})
 }
 
 func TestNilTrueFalse(t *testing.T) {
@@ -113,29 +113,29 @@ func TestErrors(t *testing.T) {
 
 func TestKeywords(t *testing.T) {
 	testRead(t, ":kw", Keyword("kw"))
-	testRead(t, "(:kw1 :kw2 :kw3)", newList(Keyword("kw1"), Keyword("kw2"), Keyword("kw3")))
+	testRead(t, "(:kw1 :kw2 :kw3)", List{Keyword("kw1"), Keyword("kw2"), Keyword("kw3")})
 }
 
 func TestVectors(t *testing.T) {
-	testRead(t, "[+ 1 2]", newVect(Symbol("+"), 1, 2))
-	testRead(t, "[]", newVect())
-	testRead(t, "[ ]", newVect())
-	testRead(t, "[[3 4]]", newVect(newVect(3, 4)))
-	testRead(t, "[+ 1 [+ 2 3]]", newVect(Symbol("+"), 1, newVect(Symbol("+"), 2, 3)))
-	testRead(t, "  [ +   1   [+   2 3   ]   ]  ", newVect(Symbol("+"), 1, newVect(Symbol("+"), 2, 3)))
-	testRead(t, "([])", newList(newVect()))
+	testRead(t, "[+ 1 2]", Vector{Symbol("+"), 1, 2})
+	testRead(t, "[]", Vector{})
+	testRead(t, "[ ]", Vector{})
+	testRead(t, "[[3 4]]", Vector{Vector{3, 4}})
+	testRead(t, "[+ 1 [+ 2 3]]", Vector{Symbol("+"), 1, Vector{Symbol("+"), 2, 3}})
+	testRead(t, "  [ +   1   [+   2 3   ]   ]  ", Vector{Symbol("+"), 1, Vector{Symbol("+"), 2, 3}})
+	testRead(t, "([])", List{Vector{}})
 }
 
 func TestMaps(t *testing.T) {
-	testRead(t, "{}", newMap{})
-	testRead(t, "{ }", newMap{})
-	testRead(t, "{\"abc\" 1}", newMap{"abc": 1})
-	testRead(t, "{\"a\" {\"b\" 2}}", newMap{"a": newMap{"b": 2}})
-	testRead(t, "{\"a\" {\"b\" {\"c\" 3}}}", newMap{"a": newMap{"b": newMap{"c": 3}}})
-	testRead(t, "{  \"a\"  {\"b\"   {  \"cde\"     3   }  }}", newMap{"a": newMap{"b": newMap{"cde": 3}}})
-	testRead(t, "{  :a  {:b   {  :cde     3   }  }}", newMap{Keyword("a"): newMap{Keyword("b"): newMap{Keyword("cde"): 3}}})
-	testRead(t, "{\"1\" 1}", newMap{"1": 1})
-	testRead(t, "({})", newList(newMap{}))
+	testRead(t, "{}", Map{})
+	testRead(t, "{ }", Map{})
+	testRead(t, "{\"abc\" 1}", Map{"abc": 1})
+	testRead(t, "{\"a\" {\"b\" 2}}", Map{"a": Map{"b": 2}})
+	testRead(t, "{\"a\" {\"b\" {\"c\" 3}}}", Map{"a": Map{"b": Map{"c": 3}}})
+	testRead(t, "{  \"a\"  {\"b\"   {  \"cde\"     3   }  }}", Map{"a": Map{"b": Map{"cde": 3}}})
+	testRead(t, "{  :a  {:b   {  :cde     3   }  }}", Map{Keyword("a"): Map{Keyword("b"): Map{Keyword("cde"): 3}}})
+	testRead(t, "{\"1\" 1}", Map{"1": 1})
+	testRead(t, "({})", List{Map{}})
 }
 
 func TestComments(t *testing.T) {
@@ -153,7 +153,7 @@ func TestComments(t *testing.T) {
 	testRead(t, "1;`", 1)
 }
 
-func testRead(t *testing.T, input string, output interface{}) {
+func testRead(t *testing.T, input string, output Expr) {
 	actual, err := read(input)
 	if err != nil {
 		t.Errorf("\nExpected: %v - %v\nActual: Error - %s\n",
@@ -175,16 +175,6 @@ func testReadError(t *testing.T, input string) {
 	}
 }
 
-func read(input string) (interface{}, error) {
+func read(input string) (Expr, error) {
 	return Read(bufio.NewReader(strings.NewReader(input)))
 }
-
-func newList(vals ...interface{}) []interface{} {
-	return vals
-}
-
-func newVect(vals ...interface{}) Vector {
-	return vals
-}
-
-type newMap = map[interface{}]interface{}
