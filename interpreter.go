@@ -41,13 +41,39 @@ type specialform func(args []Expr, env *Env) (Expr, error)
 // a wrapper around a go function
 type gofunc Expr
 
+// store a user defined function that can be applied later
 type procedure struct {
 	params []Symbol
 	body   []Expr
 	env    *Env
 }
 
+// a return value that indicates that we should perform tail call optimization
+type tailcall struct {
+	nextVal Expr
+	env     *Env
+}
+
+// Evaluate an expression using tail call optimization
 func Eval(val Expr, env *Env) (Expr, error) {
+	var err error
+	for {
+		val, err = performEval(val, env)
+		if err != nil {
+			return nil, err
+		}
+
+		tail, isTail := val.(tailcall)
+		if !isTail {
+			return val, err
+		}
+		val = tail.nextVal
+		env = tail.env
+	}
+}
+
+// Evaluate an expression (returns tailcall if tco is needed)
+func performEval(val Expr, env *Env) (Expr, error) {
 	switch t := val.(type) {
 	case Symbol:
 		return env.Find(t)
@@ -70,7 +96,7 @@ func Eval(val Expr, env *Env) (Expr, error) {
 			return spec(t[1:], env)
 		}
 
-		args, err := evalList(t[1:], env)
+		args, err := evalSlice(t[1:], env)
 		if err != nil {
 			return nil, err
 		}
@@ -97,10 +123,6 @@ func Eval(val Expr, env *Env) (Expr, error) {
 }
 
 func evalVector(val Vector, env *Env) (Vector, error) {
-	return evalSlice(val, env)
-}
-
-func evalList(val List, env *Env) (List, error) {
 	return evalSlice(val, env)
 }
 
@@ -400,11 +422,18 @@ func do(args []Expr, env *Env) (Expr, error) {
 		return nil, nil
 	}
 
-	ret, err := evalList(args, env)
+	// evaluate all args except for the last one
+	_, err := evalSlice(args[:len(args)-1], env)
 	if err != nil {
 		return nil, err
 	}
-	return ret[len(ret)-1], nil
+
+	// return an indicator that we should eval the
+	// last argument using tail call optimization
+	return tailcall{
+		nextVal: args[len(args)-1],
+		env:     env,
+	}, nil
 }
 
 func def(args []Expr, env *Env) (Expr, error) {
@@ -482,11 +511,11 @@ func ifprim(args []Expr, env *Env) (Expr, error) {
 	}
 
 	if isTruthy(cond) {
-		return Eval(args[1], env)
+		return tailcall{args[1], env}, nil
 	}
 
 	if len(args) == 3 {
-		return Eval(args[2], env)
+		return tailcall{args[2], env}, nil
 	}
 
 	return nil, nil
