@@ -97,6 +97,13 @@ func TestIf(t *testing.T) {
 	testEval(t, "(if nil 1 2)", 2)
 }
 
+func TestMap(t *testing.T) {
+	testEval(t, `({ :a "blah", :b 42} :b)`, 42)
+	testEval(t, `(do
+		(def nested { :a "blah" :nmap { :na 42 :nb 43}})
+		(nested :nmap :nb))`, 43)
+}
+
 func TestFib(t *testing.T) {
 	testEval(t, `
 		(defn fib [n]

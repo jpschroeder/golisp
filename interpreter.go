@@ -111,6 +111,11 @@ func performEval(val Expr, env *Env) (Expr, error) {
 			return apply(proc, args)
 		}
 
+		mp, isMap := front.(Map)
+		if isMap {
+			return accessMap(mp, args)
+		}
+
 		fun, isFun := front.(gofunc)
 		if isFun {
 			return call(fun, args)
@@ -122,10 +127,12 @@ func performEval(val Expr, env *Env) (Expr, error) {
 	}
 }
 
+// eval all elements in a vector
 func evalVector(val Vector, env *Env) (Vector, error) {
 	return evalSlice(val, env)
 }
 
+// eval all elements in a slice
 func evalSlice(val []Expr, env *Env) ([]Expr, error) {
 	arr := make([]Expr, len(val))
 	for i, v := range val {
@@ -138,6 +145,7 @@ func evalSlice(val []Expr, env *Env) ([]Expr, error) {
 	return arr, nil
 }
 
+// eval all elements in a map
 func evalMap(val Map, env *Env) (Map, error) {
 	ret := make(Map, len(val))
 	for k, v := range val {
@@ -150,6 +158,25 @@ func evalMap(val Map, env *Env) (Map, error) {
 			return nil, err
 		}
 		ret[evalK] = evalV
+	}
+	return ret, nil
+}
+
+// access values in a (potentially nested) map
+func accessMap(val Map, args []Expr) (Expr, error) {
+	var ret Expr
+	ret = val
+	for _, arg := range args {
+		asmap, ismap := ret.(Map)
+		if !ismap {
+			return nil, fmt.Errorf("Trying to access nested value that isn't a map: %v", arg)
+		}
+
+		access, exists := asmap[arg]
+		if !exists {
+			return nil, fmt.Errorf("Value does not exist in map: %v ", arg)
+		}
+		ret = access
 	}
 	return ret, nil
 }
@@ -169,6 +196,7 @@ func apply(proc procedure, args []Expr) (Expr, error) {
 
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
+// call a go function using reflection
 func call(fun gofunc, args []Expr) (Expr, error) {
 	f := reflect.ValueOf(fun)
 
