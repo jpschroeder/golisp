@@ -25,7 +25,7 @@ func (e *Env) Find(s Symbol) (Expr, error) {
 		return f, nil
 	}
 	if e.parent == nil {
-		return nil, fmt.Errorf("Unable to resolve symbol: %v in this context", s)
+		return nil, fmt.Errorf("unable to resolve symbol: %v in this context", s)
 	}
 	return e.parent.Find(s)
 }

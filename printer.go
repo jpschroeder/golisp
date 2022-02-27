@@ -29,7 +29,7 @@ func printSlice(val []Expr) string {
 		return ""
 	}
 	var ret strings.Builder
-	fmt.Fprintf(&ret, Print(val[0]))
+	fmt.Fprint(&ret, Print(val[0]))
 	for _, v := range val[1:] {
 		fmt.Fprintf(&ret, " %s", Print(v))
 	}

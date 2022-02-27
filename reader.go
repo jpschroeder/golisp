@@ -129,7 +129,7 @@ func matchNumber(s string) (Expr, error) {
 	if errf == nil {
 		return f, nil
 	}
-	return nil, fmt.Errorf("Invalid number: %s", s)
+	return nil, fmt.Errorf("invalid number: %s", s)
 }
 
 func isMacro(ch rune) bool {
@@ -142,7 +142,7 @@ func stringReader(r *bufio.Reader) (Expr, error) {
 
 	for ch, _, err := r.ReadRune(); ch != '"'; ch, _, err = r.ReadRune() {
 		if err != nil {
-			return nil, fmt.Errorf("Error while reading string: %v", err)
+			return nil, fmt.Errorf("error while reading string: %v", err)
 		}
 		if ch == '\\' {
 			ch, _, err = r.ReadRune()
@@ -163,7 +163,7 @@ func stringReader(r *bufio.Reader) (Expr, error) {
 			case '\\':
 			case '"':
 			default:
-				return nil, fmt.Errorf("Unsupported escape character: \\%s", string(ch))
+				return nil, fmt.Errorf("unsupported escape character: \\%s", string(ch))
 			}
 		}
 		sb.WriteRune(ch)
@@ -209,7 +209,7 @@ func characterReader(r *bufio.Reader) (Expr, error) {
 	case "return":
 		return '\r', nil
 	default:
-		return nil, fmt.Errorf("Unsupported character: \\%s", token)
+		return nil, fmt.Errorf("unsupported character: \\%s", token)
 	}
 }
 
@@ -247,7 +247,7 @@ func mapReader(r *bufio.Reader) (Expr, error) {
 }
 
 func unmatchedDelimiterReader(r *bufio.Reader) (Expr, error) {
-	return nil, errors.New("Unmatched delimter")
+	return nil, errors.New("unmatched delimter")
 }
 
 func readDelimitedList(r *bufio.Reader, delim rune, add func(Expr)) error {

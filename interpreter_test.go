@@ -97,6 +97,21 @@ func TestIf(t *testing.T) {
 	testEval(t, "(if nil 1 2)", 2)
 }
 
+func TestCond(t *testing.T) {
+	testEval(t, `(do
+		(defn abs [x]
+			(cond (> x 0) x
+				  (= x 0) 0
+				  (< x 0) (- x)))
+		(abs -5))`, 5)
+	testEval(t, `(do
+		(defn abs [x]
+			(cond (> x 0) x
+				  (= x 0) 0
+				  :else (- x)))
+		(abs -5))`, 5)
+}
+
 func TestMap(t *testing.T) {
 	testEval(t, `({ :a "blah", :b 42} :b)`, 42)
 	testEval(t, `(do

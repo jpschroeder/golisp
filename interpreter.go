@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"reflect"
 )
 
@@ -20,12 +21,14 @@ func init() {
 		Symbol(">"):           primitive(gt),
 		Symbol(">="):          primitive(gte),
 		Symbol("list"):        primitive(list),
+		Symbol("exit"):        primitive(exit),
 		Symbol("quote"):       specialform(quote),
 		Symbol("do"):          specialform(do),
 		Symbol("def"):         specialform(def),
 		Symbol("fn"):          specialform(fn),
 		Symbol("defn"):        specialform(defn),
 		Symbol("if"):          specialform(ifprim),
+		Symbol("cond"):        specialform(cond),
 		Symbol("fmt.Println"): gofunc(fmt.Println),
 		Symbol("fmt.Printf"):  gofunc(fmt.Printf),
 		Symbol("marshal"):     gofunc(marshal),
@@ -121,7 +124,7 @@ func performEval(val Expr, env *Env) (Expr, error) {
 			return call(fun, args)
 		}
 
-		return nil, fmt.Errorf("Invalid proc: %v", front)
+		return nil, fmt.Errorf("invalid proc: %v", front)
 	default:
 		return t, nil
 	}
@@ -169,12 +172,12 @@ func accessMap(val Map, args []Expr) (Expr, error) {
 	for _, arg := range args {
 		asmap, ismap := ret.(Map)
 		if !ismap {
-			return nil, fmt.Errorf("Trying to access nested value that isn't a map: %v", arg)
+			return nil, fmt.Errorf("trying to access nested value that isn't a map: %v", arg)
 		}
 
 		access, exists := asmap[arg]
 		if !exists {
-			return nil, fmt.Errorf("Value does not exist in map: %v ", arg)
+			return nil, fmt.Errorf("value does not exist in map: %v ", arg)
 		}
 		ret = access
 	}
@@ -183,7 +186,7 @@ func accessMap(val Map, args []Expr) (Expr, error) {
 
 func apply(proc procedure, args []Expr) (Expr, error) {
 	if len(args) != len(proc.params) {
-		return nil, fmt.Errorf("Wrong number of args (%d) passed to procedure", len(args))
+		return nil, fmt.Errorf("wrong number of args (%d) passed to procedure", len(args))
 	}
 
 	child := ChildEnv(proc.env)
@@ -201,13 +204,13 @@ func call(fun gofunc, args []Expr) (Expr, error) {
 	f := reflect.ValueOf(fun)
 
 	if !isArgLenValid(f.Type(), len(args)) {
-		return nil, fmt.Errorf("Wrong number of args (%d) passed to procedure", len(args))
+		return nil, fmt.Errorf("wrong number of args (%d) passed to procedure", len(args))
 	}
 
 	in := make([]reflect.Value, len(args))
 	for i, arg := range args {
 		if !isArgTypeValid(f.Type(), reflect.TypeOf(arg), i) {
-			return nil, fmt.Errorf("Wrong arg type (%v) passed to procedure", reflect.TypeOf(arg))
+			return nil, fmt.Errorf("wrong arg type (%v) passed to procedure", reflect.TypeOf(arg))
 		}
 
 		in[i] = reflect.ValueOf(arg)
@@ -286,6 +289,9 @@ func add(args []Expr) (Expr, error) {
 }
 
 func sub(args []Expr) (Expr, error) {
+	if len(args) == 1 {
+		args = append([]Expr{0}, args...)
+	}
 	return agg(args,
 		func(r, x int) int {
 			return r - x
@@ -317,7 +323,7 @@ func div(args []Expr) (Expr, error) {
 
 func agg(args []Expr, accumInt func(int, int) int, accumFloat func(float64, float64) float64) (Expr, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("Wrong number of args (%d) passed to procedure", len(args))
+		return nil, fmt.Errorf("wrong number of args (%d) passed to procedure", len(args))
 	}
 
 	ret := args[0]
@@ -337,7 +343,7 @@ func agg(args []Expr, accumInt func(int, int) int, accumFloat func(float64, floa
 		} else if rIsFloat && aIsFloat {
 			ret = accumFloat(rf, af)
 		} else {
-			return nil, fmt.Errorf("Invalid operand: %v", args[i])
+			return nil, fmt.Errorf("invalid operand: %v", args[i])
 		}
 	}
 	return ret, nil
@@ -385,7 +391,7 @@ func gte(args []Expr) (Expr, error) {
 
 func order(args []Expr, orderInt func(int, int) bool, orderFloat func(float64, float64) bool) (Expr, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("Wrong number of args (%d) passed to procedure", len(args))
+		return nil, fmt.Errorf("wrong number of args (%d) passed to procedure", len(args))
 	}
 
 	for i := 1; i < len(args); i++ {
@@ -405,7 +411,7 @@ func order(args []Expr, orderInt func(int, int) bool, orderFloat func(float64, f
 		} else if rIsFloat && aIsFloat {
 			ret = orderFloat(rf, af)
 		} else {
-			return nil, fmt.Errorf("Invalid operand: %v", args[i])
+			return nil, fmt.Errorf("invalid operand: %v", args[i])
 		}
 
 		if !ret {
@@ -417,7 +423,7 @@ func order(args []Expr, orderInt func(int, int) bool, orderFloat func(float64, f
 
 func eq(args []Expr) (Expr, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("Wrong number of args (%d) passed to: =", len(args))
+		return nil, fmt.Errorf("wrong number of args (%d) passed to: =", len(args))
 	}
 
 	compare := args[0]
@@ -436,11 +442,25 @@ func list(args []Expr) (Expr, error) {
 	return List(args), nil
 }
 
+func exit(args []Expr) (Expr, error) {
+	if len(args) == 0 {
+		os.Exit(0)
+	}
+	if len(args) == 1 {
+		code, isInt := args[0].(int)
+		if !isInt {
+			return nil, fmt.Errorf("argument to exit must be an int: %v", args[0])
+		}
+		os.Exit(code)
+	}
+	return nil, fmt.Errorf("wrong number of arguments passed to exit: %d", len(args))
+}
+
 // Special Forms
 
 func quote(args []Expr, env *Env) (Expr, error) {
 	if len(args) != 1 {
-		return nil, fmt.Errorf("Wrong number of args (%d) passed to quote", len(args))
+		return nil, fmt.Errorf("wrong number of args (%d) passed to quote", len(args))
 	}
 	return args[0], nil
 }
@@ -466,16 +486,16 @@ func do(args []Expr, env *Env) (Expr, error) {
 
 func def(args []Expr, env *Env) (Expr, error) {
 	if len(args) > 2 {
-		return nil, fmt.Errorf("Too many arguments to def")
+		return nil, fmt.Errorf("too many arguments to def")
 	}
 	if len(args) < 2 {
-		return nil, fmt.Errorf("Too few arguments to def")
+		return nil, fmt.Errorf("too few arguments to def")
 	}
 
 	sym, isSym := args[0].(Symbol)
 
 	if !isSym {
-		return nil, fmt.Errorf("First argument to def must be a Symbol")
+		return nil, fmt.Errorf("first argument to def must be a Symbol")
 	}
 
 	evaled, err := Eval(args[1], env)
@@ -489,19 +509,19 @@ func def(args []Expr, env *Env) (Expr, error) {
 
 func fn(args []Expr, env *Env) (Expr, error) {
 	if len(args) < 1 {
-		return nil, fmt.Errorf("Too few arguments to fn")
+		return nil, fmt.Errorf("too few arguments to fn")
 	}
 
 	vect, isVect := args[0].(Vector)
 	if !isVect {
-		return nil, fmt.Errorf("First argument to fn must be a Vector")
+		return nil, fmt.Errorf("first argument to fn must be a Vector")
 	}
 
 	symbols := make([]Symbol, len(vect))
 	for i, v := range vect {
 		sym, isSym := v.(Symbol)
 		if !isSym {
-			return nil, fmt.Errorf("First argument to fn must be a Vector of Symbols")
+			return nil, fmt.Errorf("first argument to fn must be a Vector of Symbols")
 		}
 		symbols[i] = sym
 	}
@@ -515,7 +535,7 @@ func fn(args []Expr, env *Env) (Expr, error) {
 
 func defn(args []Expr, env *Env) (Expr, error) {
 	if len(args) < 2 {
-		return nil, fmt.Errorf("Too few arguments to defn")
+		return nil, fmt.Errorf("too few arguments to defn")
 	}
 
 	proc, err := fn(args[1:], env)
@@ -527,10 +547,10 @@ func defn(args []Expr, env *Env) (Expr, error) {
 
 func ifprim(args []Expr, env *Env) (Expr, error) {
 	if len(args) < 2 {
-		return nil, fmt.Errorf("Too few arguments to if")
+		return nil, fmt.Errorf("too few arguments to if")
 	}
 	if len(args) > 3 {
-		return nil, fmt.Errorf("Too many arguments to if")
+		return nil, fmt.Errorf("too many arguments to if")
 	}
 
 	cond, err := Eval(args[0], env)
@@ -542,8 +562,41 @@ func ifprim(args []Expr, env *Env) (Expr, error) {
 		return tailcall{args[1], env}, nil
 	}
 
+	// else
 	if len(args) == 3 {
 		return tailcall{args[2], env}, nil
+	}
+
+	return nil, nil
+}
+
+var elsekw = Keyword("else")
+
+func cond(args []Expr, env *Env) (Expr, error) {
+	if len(args)%2 != 0 {
+		return nil, fmt.Errorf("cond must have an even number of arguments: %d", len(args))
+	}
+
+	var elseExpr Expr
+
+	for i := 0; i < len(args); i += 2 {
+		cond, err := Eval(args[i], env)
+		if err != nil {
+			return nil, err
+		}
+
+		if cond == elsekw {
+			elseExpr = args[i+1]
+			continue
+		}
+
+		if isTruthy(cond) {
+			return tailcall{args[i+1], env}, nil
+		}
+	}
+
+	if elseExpr != nil {
+		return tailcall{elseExpr, env}, nil
 	}
 
 	return nil, nil
