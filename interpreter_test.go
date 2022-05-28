@@ -21,16 +21,14 @@ func TestArithmetic(t *testing.T) {
 
 func TestEmpty(t *testing.T) {
 	testEval(t, "()", List{})
-	testEval(t, "[]", Vector{})
-	testEval(t, "{}", Map{})
+	testEval(t, "[]", []any{})
+	testEval(t, "{}", map[any]any{})
 }
 
 func TestCollections(t *testing.T) {
-	testEval(t, "[1 2 (+ 1 2)]", Vector{1, 2, 3})
-	testEval(t, "{\"a\" (+ 7 8)}", Map{"a": 15})
-	testEval(t, "{:a (+ 7 8)}", Map{Keyword("a"): 15})
-	testEval(t, "(list 1)", List{1})
-	testEval(t, "(list 1 2 (+ 1 2))", List{1, 2, 3})
+	testEval(t, "[1 2 (+ 1 2)]", []any{1, 2, 3})
+	testEval(t, "{\"a\" (+ 7 8)}", map[any]any{"a": 15})
+	testEval(t, "{:a (+ 7 8)}", map[any]any{Keyword("a"): 15})
 	testEval(t, "(quote (\"a\" (+ 7 8)))", List{"a", List{Symbol("+"), 7, 8}})
 }
 
@@ -78,12 +76,12 @@ func TestFn(t *testing.T) {
 }
 
 func TestDefn(t *testing.T) {
-	testEval(t, `(do
+	testEval(t, `
 		(defn add1 [x] (+ 1 x))
-		(add1 5))`, 6)
-	testEval(t, `(do
+		(add1 5)`, 6)
+	testEval(t, `
 		(defn addxy [x y] (+ y x))
-		(addxy 10 7))`, 17)
+		(addxy 10 7)`, 17)
 }
 
 func TestIf(t *testing.T) {
@@ -98,25 +96,25 @@ func TestIf(t *testing.T) {
 }
 
 func TestCond(t *testing.T) {
-	testEval(t, `(do
+	testEval(t, `
 		(defn abs [x]
 			(cond (> x 0) x
 				  (= x 0) 0
 				  (< x 0) (- x)))
-		(abs -5))`, 5)
-	testEval(t, `(do
+		(abs -5)`, 5)
+	testEval(t, `
 		(defn abs [x]
 			(cond (> x 0) x
 				  (= x 0) 0
 				  :else (- x)))
-		(abs -5))`, 5)
+		(abs -5)`, 5)
 }
 
 func TestMap(t *testing.T) {
 	testEval(t, `({ :a "blah", :b 42} :b)`, 42)
-	testEval(t, `(do
+	testEval(t, `
 		(def nested { :a "blah" :nmap { :na 42 :nb 43}})
-		(nested :nmap :nb))`, 43)
+		(nested :nmap :nb)`, 43)
 }
 
 func TestFib(t *testing.T) {
@@ -176,7 +174,8 @@ func TestError(t *testing.T) {
 	testEvalError(t, "(if true 1 2 3)")
 }
 
-func testEval(t *testing.T, input string, output Expr) {
+func testEval(t *testing.T, input string, output any) {
+	t.Helper()
 	actual, err := readEval(input, NewEnv())
 	if err != nil {
 		t.Errorf("\nExpected: %v - %v\nActual: Error - %s\n",
@@ -185,7 +184,7 @@ func testEval(t *testing.T, input string, output Expr) {
 		return
 	}
 	if !Equals(actual, output) {
-		t.Errorf("\nExpr: %s\nExpected: %v - %v\nActual: %v - %v\n",
+		t.Errorf("\nany: %s\nExpected: %v - %v\nActual: %v - %v\n",
 			input,
 			reflect.TypeOf(output), Print(output),
 			reflect.TypeOf(actual), Print(actual))
@@ -199,7 +198,7 @@ func testEvalError(t *testing.T, input string) {
 	}
 }
 
-func readEval(input string, env *Env) (val Expr, err error) {
+func readEval(input string, env *Env) (val any, err error) {
 	in := bufio.NewReader(strings.NewReader(input))
 
 	for {
@@ -220,7 +219,7 @@ func readEval(input string, env *Env) (val Expr, err error) {
 // Test functions to call via reflection
 
 func init() {
-	testfuncs := map[Symbol]Expr{
+	testfuncs := map[Symbol]any{
 		Symbol("testfunc"): gofunc(testfunc),
 		Symbol("testvar"):  gofunc(testvar),
 		Symbol("testerr1"): gofunc(testerr1),

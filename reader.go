@@ -9,10 +9,10 @@ import (
 	"unicode"
 )
 
-var macros map[rune]func(r *bufio.Reader) (Expr, error)
+var macros map[rune]func(r *bufio.Reader) (any, error)
 
 func init() {
-	macros = map[rune]func(r *bufio.Reader) (Expr, error){
+	macros = map[rune]func(r *bufio.Reader) (any, error){
 		'"':  stringReader,
 		';':  commentReader,
 		'(':  listReader,
@@ -29,7 +29,7 @@ func isWhitespace(ch rune) bool {
 	return unicode.IsSpace(ch) || ch == ','
 }
 
-func Read(r *bufio.Reader) (Expr, error) {
+func Read(r *bufio.Reader) (any, error) {
 	for {
 		ch, _, err := r.ReadRune()
 
@@ -87,7 +87,7 @@ func readToken(r *bufio.Reader, initch rune) (string, error) {
 	}
 }
 
-func readNumber(r *bufio.Reader, initch rune) (Expr, error) {
+func readNumber(r *bufio.Reader, initch rune) (any, error) {
 	var sb strings.Builder
 	sb.WriteRune(initch)
 
@@ -103,7 +103,7 @@ func readNumber(r *bufio.Reader, initch rune) (Expr, error) {
 	return matchNumber(sb.String())
 }
 
-func interpretToken(s string) (Expr, error) {
+func interpretToken(s string) (any, error) {
 	if s == "nil" {
 		return nil, nil
 	}
@@ -120,7 +120,7 @@ func interpretToken(s string) (Expr, error) {
 	}
 }
 
-func matchNumber(s string) (Expr, error) {
+func matchNumber(s string) (any, error) {
 	i, erri := strconv.Atoi(s)
 	if erri == nil {
 		return i, nil
@@ -137,7 +137,7 @@ func isMacro(ch rune) bool {
 	return ismacro
 }
 
-func stringReader(r *bufio.Reader) (Expr, error) {
+func stringReader(r *bufio.Reader) (any, error) {
 	var sb strings.Builder
 
 	for ch, _, err := r.ReadRune(); ch != '"'; ch, _, err = r.ReadRune() {
@@ -172,7 +172,7 @@ func stringReader(r *bufio.Reader) (Expr, error) {
 	return sb.String(), nil
 }
 
-func commentReader(r *bufio.Reader) (Expr, error) {
+func commentReader(r *bufio.Reader) (any, error) {
 	ch, _, err := r.ReadRune()
 	for err != nil && ch != '\n' && ch != '\r' {
 		ch, _, err = r.ReadRune()
@@ -180,7 +180,7 @@ func commentReader(r *bufio.Reader) (Expr, error) {
 	return r, nil
 }
 
-func characterReader(r *bufio.Reader) (Expr, error) {
+func characterReader(r *bufio.Reader) (any, error) {
 	ch, _, err := r.ReadRune()
 	if err != nil {
 		return nil, err
@@ -213,26 +213,26 @@ func characterReader(r *bufio.Reader) (Expr, error) {
 	}
 }
 
-func listReader(r *bufio.Reader) (Expr, error) {
-	var l []Expr
-	err := readDelimitedList(r, ')', func(item Expr) {
+func listReader(r *bufio.Reader) (any, error) {
+	var l []any
+	err := readDelimitedList(r, ')', func(item any) {
 		l = append(l, item)
 	})
 	return List(l), err
 }
 
-func vectorReader(r *bufio.Reader) (Expr, error) {
-	var l []Expr
-	err := readDelimitedList(r, ']', func(item Expr) {
+func vectorReader(r *bufio.Reader) (any, error) {
+	var l []any
+	err := readDelimitedList(r, ']', func(item any) {
 		l = append(l, item)
 	})
-	return Vector(l), err
+	return l, err
 }
 
-func mapReader(r *bufio.Reader) (Expr, error) {
-	m := make(Map)
-	var key Expr
-	err := readDelimitedList(r, '}', func(item Expr) {
+func mapReader(r *bufio.Reader) (any, error) {
+	m := make(map[any]any)
+	var key any
+	err := readDelimitedList(r, '}', func(item any) {
 		if key == nil {
 			key = item
 		} else {
@@ -241,16 +241,16 @@ func mapReader(r *bufio.Reader) (Expr, error) {
 		}
 	})
 	if key != nil {
-		return nil, fmt.Errorf("Map literal must contain an even number of forms")
+		return nil, fmt.Errorf("map[any]any literal must contain an even number of forms")
 	}
 	return m, err
 }
 
-func unmatchedDelimiterReader(r *bufio.Reader) (Expr, error) {
+func unmatchedDelimiterReader(r *bufio.Reader) (any, error) {
 	return nil, errors.New("unmatched delimter")
 }
 
-func readDelimitedList(r *bufio.Reader, delim rune, add func(Expr)) error {
+func readDelimitedList(r *bufio.Reader, delim rune, add func(any)) error {
 	for {
 		ch, _, err := r.ReadRune()
 

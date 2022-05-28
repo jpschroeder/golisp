@@ -11,10 +11,7 @@ import (
 
 type Symbol string
 type Keyword string
-type Expr interface{}
-type Vector []Expr
-type List []Expr
-type Map map[Expr]Expr
+type List []any
 
 func ReadEvalPrint(in *bufio.Reader, env *Env) (string, error) {
 	val, err := Read(in)

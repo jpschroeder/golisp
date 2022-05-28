@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func Print(val Expr) string {
+func Print(val any) string {
 	switch t := val.(type) {
 	case string, rune:
 		return fmt.Sprintf("%q", t)
@@ -13,9 +13,9 @@ func Print(val Expr) string {
 		return "nil"
 	case List:
 		return fmt.Sprintf("(%s)", printSlice(t))
-	case Vector:
+	case []any:
 		return fmt.Sprintf("[%s]", printSlice(t))
-	case Map:
+	case map[any]any:
 		return fmt.Sprintf("{%s}", printMap(t))
 	case Keyword:
 		return fmt.Sprintf(":%s", t)
@@ -24,7 +24,7 @@ func Print(val Expr) string {
 	}
 }
 
-func printSlice(val []Expr) string {
+func printSlice(val []any) string {
 	if len(val) < 1 {
 		return ""
 	}
@@ -36,7 +36,7 @@ func printSlice(val []Expr) string {
 	return ret.String()
 }
 
-func printMap(val Map) string {
+func printMap(val map[any]any) string {
 	if len(val) < 1 {
 		return ""
 	}

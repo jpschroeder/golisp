@@ -7,10 +7,10 @@ import (
 	"reflect"
 )
 
-var defaultEnv map[Symbol]Expr
+var defaultEnv map[Symbol]any
 
 func init() {
-	defaultEnv = map[Symbol]Expr{
+	defaultEnv = map[Symbol]any{
 		Symbol("+"):           primitive(add),
 		Symbol("-"):           primitive(sub),
 		Symbol("*"):           primitive(mul),
@@ -20,7 +20,6 @@ func init() {
 		Symbol("<="):          primitive(lte),
 		Symbol(">"):           primitive(gt),
 		Symbol(">="):          primitive(gte),
-		Symbol("list"):        primitive(list),
 		Symbol("exit"):        primitive(exit),
 		Symbol("quote"):       specialform(quote),
 		Symbol("do"):          specialform(do),
@@ -36,29 +35,29 @@ func init() {
 }
 
 // primitives take pre-evaluated arguments
-type primitive func(args []Expr) (Expr, error)
+type primitive func(args []any) (any, error)
 
 // special forms take unevaluated arguments and the env
-type specialform func(args []Expr, env *Env) (Expr, error)
+type specialform func(args []any, env *Env) (any, error)
 
 // a wrapper around a go function
-type gofunc Expr
+type gofunc any
 
 // store a user defined function that can be applied later
 type procedure struct {
 	params []Symbol
-	body   []Expr
+	body   []any
 	env    *Env
 }
 
 // a return value that indicates that we should perform tail call optimization
 type tailcall struct {
-	nextVal Expr
+	nextVal any
 	env     *Env
 }
 
 // Evaluate an expression using tail call optimization
-func Eval(val Expr, env *Env) (Expr, error) {
+func Eval(val any, env *Env) (any, error) {
 	var err error
 	for {
 		val, err = performEval(val, env)
@@ -76,13 +75,13 @@ func Eval(val Expr, env *Env) (Expr, error) {
 }
 
 // Evaluate an expression (returns tailcall if tco is needed)
-func performEval(val Expr, env *Env) (Expr, error) {
+func performEval(val any, env *Env) (any, error) {
 	switch t := val.(type) {
 	case Symbol:
 		return env.Find(t)
-	case Vector:
-		return evalVector(t, env)
-	case Map:
+	case []any:
+		return evalSlice(t, env)
+	case map[any]any:
 		return evalMap(t, env)
 	case List:
 		if len(t) == 0 {
@@ -114,7 +113,7 @@ func performEval(val Expr, env *Env) (Expr, error) {
 			return apply(proc, args)
 		}
 
-		mp, isMap := front.(Map)
+		mp, isMap := front.(map[any]any)
 		if isMap {
 			return accessMap(mp, args)
 		}
@@ -130,14 +129,9 @@ func performEval(val Expr, env *Env) (Expr, error) {
 	}
 }
 
-// eval all elements in a vector
-func evalVector(val Vector, env *Env) (Vector, error) {
-	return evalSlice(val, env)
-}
-
 // eval all elements in a slice
-func evalSlice(val []Expr, env *Env) ([]Expr, error) {
-	arr := make([]Expr, len(val))
+func evalSlice(val []any, env *Env) ([]any, error) {
+	arr := make([]any, len(val))
 	for i, v := range val {
 		res, err := Eval(v, env)
 		if err != nil {
@@ -149,8 +143,8 @@ func evalSlice(val []Expr, env *Env) ([]Expr, error) {
 }
 
 // eval all elements in a map
-func evalMap(val Map, env *Env) (Map, error) {
-	ret := make(Map, len(val))
+func evalMap(val map[any]any, env *Env) (map[any]any, error) {
+	ret := make(map[any]any, len(val))
 	for k, v := range val {
 		evalK, err := Eval(k, env)
 		if err != nil {
@@ -166,11 +160,11 @@ func evalMap(val Map, env *Env) (Map, error) {
 }
 
 // access values in a (potentially nested) map
-func accessMap(val Map, args []Expr) (Expr, error) {
-	var ret Expr
+func accessMap(val map[any]any, args []any) (any, error) {
+	var ret any
 	ret = val
 	for _, arg := range args {
-		asmap, ismap := ret.(Map)
+		asmap, ismap := ret.(map[any]any)
 		if !ismap {
 			return nil, fmt.Errorf("trying to access nested value that isn't a map: %v", arg)
 		}
@@ -184,7 +178,7 @@ func accessMap(val Map, args []Expr) (Expr, error) {
 	return ret, nil
 }
 
-func apply(proc procedure, args []Expr) (Expr, error) {
+func apply(proc procedure, args []any) (any, error) {
 	if len(args) != len(proc.params) {
 		return nil, fmt.Errorf("wrong number of args (%d) passed to procedure", len(args))
 	}
@@ -200,7 +194,7 @@ func apply(proc procedure, args []Expr) (Expr, error) {
 var errorType = reflect.TypeOf((*error)(nil)).Elem()
 
 // call a go function using reflection
-func call(fun gofunc, args []Expr) (Expr, error) {
+func call(fun gofunc, args []any) (any, error) {
 	f := reflect.ValueOf(fun)
 
 	if !isArgLenValid(f.Type(), len(args)) {
@@ -278,7 +272,7 @@ func isArgTypeValid(funcT, argT reflect.Type, argIdx int) bool {
 
 // Primitives
 
-func add(args []Expr) (Expr, error) {
+func add(args []any) (any, error) {
 	return agg(args,
 		func(r, x int) int {
 			return r + x
@@ -288,9 +282,9 @@ func add(args []Expr) (Expr, error) {
 		})
 }
 
-func sub(args []Expr) (Expr, error) {
+func sub(args []any) (any, error) {
 	if len(args) == 1 {
-		args = append([]Expr{0}, args...)
+		args = append([]any{0}, args...)
 	}
 	return agg(args,
 		func(r, x int) int {
@@ -301,7 +295,7 @@ func sub(args []Expr) (Expr, error) {
 		})
 }
 
-func mul(args []Expr) (Expr, error) {
+func mul(args []any) (any, error) {
 	return agg(args,
 		func(r, x int) int {
 			return r * x
@@ -311,7 +305,7 @@ func mul(args []Expr) (Expr, error) {
 		})
 }
 
-func div(args []Expr) (Expr, error) {
+func div(args []any) (any, error) {
 	return agg(args,
 		func(r, x int) int {
 			return r / x
@@ -321,7 +315,7 @@ func div(args []Expr) (Expr, error) {
 		})
 }
 
-func agg(args []Expr, accumInt func(int, int) int, accumFloat func(float64, float64) float64) (Expr, error) {
+func agg(args []any, accumInt func(int, int) int, accumFloat func(float64, float64) float64) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("wrong number of args (%d) passed to procedure", len(args))
 	}
@@ -349,7 +343,7 @@ func agg(args []Expr, accumInt func(int, int) int, accumFloat func(float64, floa
 	return ret, nil
 }
 
-func lt(args []Expr) (Expr, error) {
+func lt(args []any) (any, error) {
 	return order(args,
 		func(r, x int) bool {
 			return r < x
@@ -359,7 +353,7 @@ func lt(args []Expr) (Expr, error) {
 		})
 }
 
-func lte(args []Expr) (Expr, error) {
+func lte(args []any) (any, error) {
 	return order(args,
 		func(r, x int) bool {
 			return r <= x
@@ -369,7 +363,7 @@ func lte(args []Expr) (Expr, error) {
 		})
 }
 
-func gt(args []Expr) (Expr, error) {
+func gt(args []any) (any, error) {
 	return order(args,
 		func(r, x int) bool {
 			return r > x
@@ -379,7 +373,7 @@ func gt(args []Expr) (Expr, error) {
 		})
 }
 
-func gte(args []Expr) (Expr, error) {
+func gte(args []any) (any, error) {
 	return order(args,
 		func(r, x int) bool {
 			return r >= x
@@ -389,7 +383,7 @@ func gte(args []Expr) (Expr, error) {
 		})
 }
 
-func order(args []Expr, orderInt func(int, int) bool, orderFloat func(float64, float64) bool) (Expr, error) {
+func order(args []any, orderInt func(int, int) bool, orderFloat func(float64, float64) bool) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("wrong number of args (%d) passed to procedure", len(args))
 	}
@@ -421,7 +415,7 @@ func order(args []Expr, orderInt func(int, int) bool, orderFloat func(float64, f
 	return true, nil
 }
 
-func eq(args []Expr) (Expr, error) {
+func eq(args []any) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("wrong number of args (%d) passed to: =", len(args))
 	}
@@ -438,11 +432,7 @@ func eq(args []Expr) (Expr, error) {
 	return true, nil
 }
 
-func list(args []Expr) (Expr, error) {
-	return List(args), nil
-}
-
-func exit(args []Expr) (Expr, error) {
+func exit(args []any) (any, error) {
 	if len(args) == 0 {
 		os.Exit(0)
 	}
@@ -458,14 +448,14 @@ func exit(args []Expr) (Expr, error) {
 
 // Special Forms
 
-func quote(args []Expr, env *Env) (Expr, error) {
+func quote(args []any, env *Env) (any, error) {
 	if len(args) != 1 {
 		return nil, fmt.Errorf("wrong number of args (%d) passed to quote", len(args))
 	}
 	return args[0], nil
 }
 
-func do(args []Expr, env *Env) (Expr, error) {
+func do(args []any, env *Env) (any, error) {
 	if len(args) == 0 {
 		return nil, nil
 	}
@@ -484,7 +474,7 @@ func do(args []Expr, env *Env) (Expr, error) {
 	}, nil
 }
 
-func def(args []Expr, env *Env) (Expr, error) {
+func def(args []any, env *Env) (any, error) {
 	if len(args) > 2 {
 		return nil, fmt.Errorf("too many arguments to def")
 	}
@@ -507,21 +497,21 @@ func def(args []Expr, env *Env) (Expr, error) {
 	return sym, nil
 }
 
-func fn(args []Expr, env *Env) (Expr, error) {
+func fn(args []any, env *Env) (any, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("too few arguments to fn")
 	}
 
-	vect, isVect := args[0].(Vector)
+	vect, isVect := args[0].([]any)
 	if !isVect {
-		return nil, fmt.Errorf("first argument to fn must be a Vector")
+		return nil, fmt.Errorf("first argument to fn must be a []any")
 	}
 
 	symbols := make([]Symbol, len(vect))
 	for i, v := range vect {
 		sym, isSym := v.(Symbol)
 		if !isSym {
-			return nil, fmt.Errorf("first argument to fn must be a Vector of Symbols")
+			return nil, fmt.Errorf("first argument to fn must be a []any of Symbols")
 		}
 		symbols[i] = sym
 	}
@@ -533,7 +523,7 @@ func fn(args []Expr, env *Env) (Expr, error) {
 	}, nil
 }
 
-func defn(args []Expr, env *Env) (Expr, error) {
+func defn(args []any, env *Env) (any, error) {
 	if len(args) < 2 {
 		return nil, fmt.Errorf("too few arguments to defn")
 	}
@@ -542,10 +532,10 @@ func defn(args []Expr, env *Env) (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	return def([]Expr{args[0], proc}, env)
+	return def([]any{args[0], proc}, env)
 }
 
-func ifprim(args []Expr, env *Env) (Expr, error) {
+func ifprim(args []any, env *Env) (any, error) {
 	if len(args) < 2 {
 		return nil, fmt.Errorf("too few arguments to if")
 	}
@@ -572,12 +562,12 @@ func ifprim(args []Expr, env *Env) (Expr, error) {
 
 var elsekw = Keyword("else")
 
-func cond(args []Expr, env *Env) (Expr, error) {
+func cond(args []any, env *Env) (any, error) {
 	if len(args)%2 != 0 {
 		return nil, fmt.Errorf("cond must have an even number of arguments: %d", len(args))
 	}
 
-	var elseExpr Expr
+	var elseExpr any
 
 	for i := 0; i < len(args); i += 2 {
 		cond, err := Eval(args[i], env)
@@ -602,7 +592,7 @@ func cond(args []Expr, env *Env) (Expr, error) {
 	return nil, nil
 }
 
-func isTruthy(val Expr) bool {
+func isTruthy(val any) bool {
 	isTrue, isBoolean := val.(bool)
 	if isBoolean {
 		return isTrue

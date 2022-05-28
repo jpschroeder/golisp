@@ -117,25 +117,25 @@ func TestKeywords(t *testing.T) {
 }
 
 func TestVectors(t *testing.T) {
-	testRead(t, "[+ 1 2]", Vector{Symbol("+"), 1, 2})
-	testRead(t, "[]", Vector{})
-	testRead(t, "[ ]", Vector{})
-	testRead(t, "[[3 4]]", Vector{Vector{3, 4}})
-	testRead(t, "[+ 1 [+ 2 3]]", Vector{Symbol("+"), 1, Vector{Symbol("+"), 2, 3}})
-	testRead(t, "  [ +   1   [+   2 3   ]   ]  ", Vector{Symbol("+"), 1, Vector{Symbol("+"), 2, 3}})
-	testRead(t, "([])", List{Vector{}})
+	testRead(t, "[+ 1 2]", []any{Symbol("+"), 1, 2})
+	testRead(t, "[]", []any{})
+	testRead(t, "[ ]", []any{})
+	testRead(t, "[[3 4]]", []any{[]any{3, 4}})
+	testRead(t, "[+ 1 [+ 2 3]]", []any{Symbol("+"), 1, []any{Symbol("+"), 2, 3}})
+	testRead(t, "  [ +   1   [+   2 3   ]   ]  ", []any{Symbol("+"), 1, []any{Symbol("+"), 2, 3}})
+	testRead(t, "([])", List{[]any{}})
 }
 
 func TestMaps(t *testing.T) {
-	testRead(t, "{}", Map{})
-	testRead(t, "{ }", Map{})
-	testRead(t, "{\"abc\" 1}", Map{"abc": 1})
-	testRead(t, "{\"a\" {\"b\" 2}}", Map{"a": Map{"b": 2}})
-	testRead(t, "{\"a\" {\"b\" {\"c\" 3}}}", Map{"a": Map{"b": Map{"c": 3}}})
-	testRead(t, "{  \"a\"  {\"b\"   {  \"cde\"     3   }  }}", Map{"a": Map{"b": Map{"cde": 3}}})
-	testRead(t, "{  :a  {:b   {  :cde     3   }  }}", Map{Keyword("a"): Map{Keyword("b"): Map{Keyword("cde"): 3}}})
-	testRead(t, "{\"1\" 1}", Map{"1": 1})
-	testRead(t, "({})", List{Map{}})
+	testRead(t, "{}", map[any]any{})
+	testRead(t, "{ }", map[any]any{})
+	testRead(t, "{\"abc\" 1}", map[any]any{"abc": 1})
+	testRead(t, "{\"a\" {\"b\" 2}}", map[any]any{"a": map[any]any{"b": 2}})
+	testRead(t, "{\"a\" {\"b\" {\"c\" 3}}}", map[any]any{"a": map[any]any{"b": map[any]any{"c": 3}}})
+	testRead(t, "{  \"a\"  {\"b\"   {  \"cde\"     3   }  }}", map[any]any{"a": map[any]any{"b": map[any]any{"cde": 3}}})
+	testRead(t, "{  :a  {:b   {  :cde     3   }  }}", map[any]any{Keyword("a"): map[any]any{Keyword("b"): map[any]any{Keyword("cde"): 3}}})
+	testRead(t, "{\"1\" 1}", map[any]any{"1": 1})
+	testRead(t, "({})", List{map[any]any{}})
 }
 
 func TestComments(t *testing.T) {
@@ -153,7 +153,7 @@ func TestComments(t *testing.T) {
 	testRead(t, "1;`", 1)
 }
 
-func testRead(t *testing.T, input string, output Expr) {
+func testRead(t *testing.T, input string, output any) {
 	actual, err := read(input)
 	if err != nil {
 		t.Errorf("\nExpected: %v - %v\nActual: Error - %s\n",
@@ -175,6 +175,6 @@ func testReadError(t *testing.T, input string) {
 	}
 }
 
-func read(input string) (Expr, error) {
+func read(input string) (any, error) {
 	return Read(bufio.NewReader(strings.NewReader(input)))
 }
